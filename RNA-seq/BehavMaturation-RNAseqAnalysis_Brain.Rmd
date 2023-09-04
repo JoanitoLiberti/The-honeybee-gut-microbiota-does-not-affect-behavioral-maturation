@@ -1,0 +1,413 @@
+---
+title: "Differential gene expression analysis of the brain of gnotobiotic honey bees"
+author: "Joanito Liberti, University of Lausanne"
+output: github_document
+---
+
+# **Set the working directory (in R notebook the working directory needs to be assigned within a "setup" chunk, or it will only work within the individual chunks in which it was set)**
+```{r setup}
+path <- "/Volumes/gr_Engel/lab_resources/Manuscripts/2023_Liberti_Maturation/Code/RNA-seq"
+knitr::opts_knit$set(root.dir = normalizePath(path)) 
+```
+
+# Read in count table and metadata in R
+```{r, echo=T, results='hide', message=F, warning=F}
+count.table <- read.table("RNAseq_brain_counts.txt", header = T, check.names = F)
+count.table
+
+Design <- read.table("RNAseq_brain_metadata_NandF.txt", header = T, colClasses = "factor")
+Design
+
+Design_AL <- Design[Design$Region == "AL", ]
+Design_MB <- Design[Design$Region == "MB", ]
+Design_OL <- Design[Design$Region == "OL", ]
+
+rownames(Design_AL)<-Design_AL$Sample
+rownames(Design_MB)<-Design_MB$Sample
+rownames(Design_OL)<-Design_OL$Sample
+
+# We make sure the order of the columns (Sample_IDs) in the count table matches that of the metadata table
+library(data.table)
+count.table <- as.data.frame(count.table)
+count.table <- setcolorder(count.table, as.character(Design$Sample))
+```
+
+## DEG analysis with edgeR/Limma/Voom
+## In depth analyses of the effect of the gut microbiota on brain gene expression from this same dataset have been previously published (Liberti, J., Kay, T., Quinn, A. et al. The gut microbiota affects the social network of honeybees. Nat Ecol Evol 6, 1471–1479 (2022). https://doi.org/10.1038/s41559-022-01840-w), and analysis codes are available at https://github.com/JoanitoLiberti/The-gut-microbiota-affects-the-social-network-of-honeybees.
+## Here we repeat these analyses by gut microbiota treatment to then compare the lists of DEGs with those we now obtain for the behavioral maturation factor. Please download the GCF_003254395.2_Amel_HAv3.1_genomic.gtf.gz file from https://github.com/JoanitoLiberti/The-gut-microbiota-affects-the-social-network-of-honeybees/blob/master/RNA-sequencing/GCF_003254395.2_Amel_HAv3.1_genomic.gtf.gz
+```{r, echo=T, results='hide', message=F, warning=F}
+library(edgeR)
+y=DGEList(counts=count.table)
+
+## Load gene annotation from gff file 
+library(rtracklayer)
+my_tags <- c("gene_id", "description", "transcript_id", "product")
+df1 <- readGFF("/Users/joanitoliberti/Downloads/genome_assemblies_genome_gtf/ncbi-genomes-2020-12-28/GCF_003254395.2_Amel_HAv3.1_genomic.gtf", tags = my_tags)
+head(df1)
+df2 <- df1[,c("gene_id", "transcript_id")] 
+df2 <- df2[!duplicated(df2), ]
+
+delete.na <- function(DF, n=0) {
+  DF[rowSums(is.na(DF)) <= n,]
+}
+df2<-delete.na(df2)
+
+df3 <- df1[,c("gene_id", "product")] 
+df3 <- transform(df3, n=nchar(as.character(product)))
+df3 <- delete.na(df3)
+df3 <- df3[with(df3, order(gene_id, n, decreasing = T)), ]
+df3$n <- NULL
+df3 <- df3[!duplicated(df3$gene_id), ]
+df3$product <- sub(" isoform.*", "", df3$product)
+df3$product <- sub(", transcript.*", "", df3$product)
+df3$product <- sub(" precursor.*", "", df3$product)
+
+annot<-df3[df3$gene_id%in%row.names(y),] 
+annot <- annot[order(match(annot[,"gene_id"],row.names(y))),]
+
+setdiff(row.names(y), annot$gene_id) # check that there are no differences between row names of y and merged annotation, otherwise it will not work to add the annotation to the DGElist 
+
+# Append annotation to DGElist
+gen <- as.data.frame(annot$product)
+names(gen)[names(gen) == "annot$product"] <- "description"
+y$genes <- gen
+
+Hive=factor(Design$Hive)
+Batch=factor(Design$Batch)
+Behav=factor(Design$NandF)
+Bee_ID=factor(Design$Sample_ID)
+Region=factor(Design$Region)
+Treatment <- relevel(Design$Treatment, "MD")
+Treat=factor(Treatment)
+```
+
+## **Build the model**
+```{r, echo=T, message=F, warning=F}
+# Set the model formula - Here we test all samples together and then we will take into account that the regions are paired by bee individual. We make one group factor containing all combinations of treatments and brain regions
+group <- paste0(Treat, Region) 
+design <- model.matrix(~0 + group + Batch)
+
+# Filter out low expressed genes
+keep <- filterByExpr(y, design, min.count = 20, min.total.count = 20)
+y <- y[keep,,keep.lib.sizes=FALSE]
+dim(y)
+
+# Now normalize counts
+y=calcNormFactors(y, method = "TMM")
+
+colnames(design)<-make.names(colnames(design))
+v=voom(y,design,plot=TRUE)
+cor=duplicateCorrelation(v,design,block=Design$Sample_ID)
+
+fit=lmFit(v,design,block=Design$Sample_ID, correlation=cor$consensus)
+head(coef(fit))
+```
+
+## **1) What genes are DEGs between the treatments overall (across the three brain regions)? MD = microbiota-depleted bees, CL_Bifi = bees colonized only with Bifidobacterium, CL_13 = bees colonized with a community of 13 strains grown on plates, CL = bees colonized with a gut homogenate from 5 nurse bees**
+```{r, echo=T, results='hide', message=F, warning=F}
+con <- makeContrasts(
+   MDvsCL=  (groupCLAL + groupCLMB + groupCLOL)/3 -
+    (groupMDAL + groupMDMB + groupMDOL)/3,
+   MDvsCL_13=  (groupCL_13AL + groupCL_13MB + groupCL_13OL)/3 -
+    (groupMDAL + groupMDMB + groupMDOL)/3,
+   MDvsCLCL_13=  (groupCL_13AL + groupCL_13MB + groupCL_13OL +
+                 groupCLAL + groupCLMB + groupCLOL)/6 -
+                (groupMDAL + groupMDMB + groupMDOL)/3,
+   MDvsCL_Bifi=  (groupCL_BifiAL + groupCL_BifiMB + groupCL_BifiOL)/3 -
+    (groupMDAL + groupMDMB + groupMDOL)/3,
+   MDvsCLCL_13CL_Bifi=  (groupCL_13AL + groupCL_13MB + groupCL_13OL +
+                 groupCLAL + groupCLMB + groupCLOL +
+                   groupCL_BifiAL + groupCL_BifiMB + groupCL_BifiOL)/9 -
+                (groupMDAL + groupMDMB + groupMDOL)/3,
+   CL_13vsCL=  (groupCLAL + groupCLMB + groupCLOL)/3 -
+    (groupCL_13AL + groupCL_13MB + groupCL_13OL)/3,
+    levels=design)
+
+fit2=contrasts.fit(fit,con)
+fit2=eBayes(fit2, robust=TRUE)
+
+dt.Treat <- decideTests(fit2, p=0.05)
+summary(dt.Treat)
+
+MDvsCL_table=topTable(fit2,coef="MDvsCL",n=Inf, sort="p", p=0.05)
+MDvsCL_13_table=topTable(fit2,coef="MDvsCL_13",n=Inf, sort="p", p=0.05)
+MDvsCLCL_13_table=topTable(fit2,coef="MDvsCLCL_13",n=Inf, sort="p", p=0.05)
+MDvsCL_Bifi_table=topTable(fit2,coef="MDvsCL_Bifi",n=Inf, sort="p", p=0.05)
+MDvsCLCL_13CL_Bifi_table=topTable(fit2,coef="MDvsCLCL_13CL_Bifi",n=Inf, sort="p", p=0.05)
+CL_13vsCL_table=topTable(fit2,coef="CL_13vsCL",n=Inf, sort="p", p=0.05)
+
+# Store the DEG lists of each contrast 
+MDvsCL_DEGs <- row.names(MDvsCL_table)
+MDvsCL_13_DEGs <- row.names(MDvsCL_13_table)
+MDvsCLCL_13_DEGs <- row.names(MDvsCLCL_13_table)
+MDvsCL_Bifi_DEGs <- row.names(MDvsCL_Bifi_table)
+MDvsCLCL_13CL_Bifi_DEGs <- row.names(MDvsCLCL_13CL_Bifi_table)
+CL_13vsCL_DEGs <- row.names(CL_13vsCL_table)
+
+AcrossBrain_DEGs <- unique(sort(c(MDvsCL_DEGs, MDvsCL_13_DEGs, MDvsCLCL_13_DEGs, MDvsCL_Bifi_DEGs, MDvsCLCL_13CL_Bifi_DEGs)))
+```
+
+## **2) What are the effects of treatment on individual brain regions (the same contrasts as before but by brain region)?**
+### **Optic lobes**
+```{r, echo=T, results='hide', message=F, warning=F}
+con <- makeContrasts(
+    OL.MDvsCL= groupCLOL - groupMDOL,
+    OL.MDvsCL_13= groupCL_13OL - groupMDOL,
+    OL.MDvsCLCL_13= (groupCLOL + groupCL_13OL)/2 - groupMDOL,
+    OL.MDvsCL_Bifi= groupCL_BifiOL - groupMDOL,
+    OL.MDvsCLCL_13CL_Bifi= (groupCLOL + groupCL_13OL + groupCL_BifiOL)/3 - groupMDOL,
+    OL.CL_13vsCL= groupCLOL - groupCL_13OL,
+    levels=design)
+
+fit2=contrasts.fit(fit,con)
+fit2=eBayes(fit2, robust=TRUE)
+
+summary(decideTests(fit2, p=0.05))
+
+OL.MDvsCL_table=topTable(fit2,coef="OL.MDvsCL",n=Inf, sort="p", p=0.05)
+OL.MDvsCL_13_table=topTable(fit2,coef="OL.MDvsCL_13",n=Inf, sort="p", p=0.05)
+OL.MDvsCLCL_13_table=topTable(fit2,coef="OL.MDvsCLCL_13",n=Inf, sort="p", p=0.05)
+OL.MDvsCL_Bifi_table=topTable(fit2,coef="OL.MDvsCL_Bifi",n=Inf, sort="p", p=0.05)
+OL.MDvsCLCL_13CL_Bifi_table=topTable(fit2,coef="OL.MDvsCLCL_13CL_Bifi",n=Inf, sort="p", p=0.05)
+OL.CL_13vsCL_table=topTable(fit2,coef="OL.CL_13vsCL",n=Inf, sort="p", p=0.05)
+```
+
+### **Mushroom bodies**
+```{r, echo=T, results='hide', message=F, warning=F}
+con <- makeContrasts(
+    MB.MDvsCL= groupCLMB - groupMDMB,
+    MB.MDvsCL_13= groupCL_13MB - groupMDMB,
+    MB.MDvsCLCL_13= (groupCLMB + groupCL_13MB)/2 - groupMDMB,
+    MB.MDvsCL_Bifi= groupCL_BifiMB - groupMDMB,
+    MB.MDvsCLCL_13CL_Bifi= (groupCLMB + groupCL_13MB + groupCL_BifiMB)/3 - groupMDMB,
+    MB.CL_13vsCL= groupCLMB - groupCL_13MB,
+    levels=design)
+
+fit2=contrasts.fit(fit,con)
+fit2=eBayes(fit2, robust=TRUE)
+
+summary(decideTests(fit2, p=0.05))
+
+MB.MDvsCL_table=topTable(fit2,coef="MB.MDvsCL",n=Inf, sort="p", p=0.05)
+MB.MDvsCL_13_table=topTable(fit2,coef="MB.MDvsCL_13",n=Inf, sort="p", p=0.05)
+MB.MDvsCLCL_13_table=topTable(fit2,coef="MB.MDvsCLCL_13",n=Inf, sort="p", p=0.05)
+MB.MDvsCL_Bifi_table=topTable(fit2,coef="MB.MDvsCL_Bifi",n=Inf, sort="p", p=0.05)
+MB.MDvsCLCL_13CL_Bifi_table=topTable(fit2,coef="MB.MDvsCLCL_13CL_Bifi",n=Inf, sort="p", p=0.05)
+MB.CL_13vsCL_table=topTable(fit2,coef="MB.CL_13vsCL",n=Inf, sort="p", p=0.05)
+```
+
+### **Antennal lobes + subaesophageal ganglion**
+```{r, echo=T, results='hide', message=F, warning=F}
+con <- makeContrasts(
+    AL.MDvsCL= groupCLAL - groupMDAL,
+    AL.MDvsCL_13= groupCL_13AL - groupMDAL,
+    AL.MDvsCLCL_13= (groupCLAL + groupCL_13AL)/2 - groupMDAL,
+    AL.MDvsCL_Bifi= groupCL_BifiAL - groupMDAL,
+    AL.MDvsCLCL_13CL_Bifi= (groupCLAL + groupCL_13AL + groupCL_BifiAL)/3 - groupMDAL,
+    AL.CL_13vsCL= groupCLAL - groupCL_13AL,
+    levels=design)
+
+fit2=contrasts.fit(fit,con)
+fit2=eBayes(fit2, robust=TRUE)
+
+summary(decideTests(fit2, p=0.05))
+
+AL.MDvsCL_table=topTable(fit2,coef="AL.MDvsCL",n=Inf, sort="p", p=0.05)
+AL.MDvsCL_13_table=topTable(fit2,coef="AL.MDvsCL_13",n=Inf, sort="p", p=0.05)
+AL.MDvsCLCL_13_table=topTable(fit2,coef="AL.MDvsCLCL_13",n=Inf, sort="p", p=0.05)
+AL.MDvsCL_Bifi_table=topTable(fit2,coef="AL.MDvsCL_Bifi",n=Inf, sort="p", p=0.05)
+AL.MDvsCLCL_13CL_Bifi_table=topTable(fit2,coef="AL.MDvsCLCL_13CL_Bifi",n=Inf, sort="p", p=0.05)
+AL.CL_13vsCL_table=topTable(fit2,coef="AL.CL_13vsCL",n=Inf, sort="p", p=0.05)
+
+```
+
+## Store DEG lists 
+```{r, echo=T, results='hide', message=F, warning=F}
+AL.MDvsCL_DEGs <- row.names(AL.MDvsCL_table)
+AL.MDvsCL_13_DEGs <- row.names(AL.MDvsCL_13_table)
+AL.MDvsCLCL_13_DEGs <- row.names(AL.MDvsCLCL_13_table)
+AL.MDvsCL_Bifi_DEGs <- row.names(AL.MDvsCL_Bifi_table)
+AL.MDvsCLCL_13CL_Bifi_DEGs <- row.names(AL.MDvsCLCL_13CL_Bifi_table)
+AL.CL_13vsCL_DEGs <- row.names(AL.CL_13vsCL_table)
+MB.MDvsCL_DEGs <- row.names(MB.MDvsCL_table)
+MB.MDvsCL_13_DEGs <- row.names(MB.MDvsCL_13_table)
+MB.MDvsCLCL_13_DEGs <- row.names(MB.MDvsCLCL_13_table)
+MB.MDvsCL_Bifi_DEGs <- row.names(MB.MDvsCL_Bifi_table)
+MB.MDvsCLCL_13CL_Bifi_DEGs <- row.names(MB.MDvsCLCL_13CL_Bifi_table)
+MB.CL_13vsCL_DEGs <- row.names(MB.CL_13vsCL_table)
+OL.MDvsCL_DEGs <- row.names(OL.MDvsCL_table)
+OL.MDvsCL_13_DEGs <- row.names(OL.MDvsCL_13_table)
+OL.MDvsCLCL_13_DEGs <- row.names(OL.MDvsCLCL_13_table)
+OL.MDvsCL_Bifi_DEGs <- row.names(OL.MDvsCL_Bifi_table)
+OL.MDvsCLCL_13CL_Bifi_DEGs <- row.names(OL.MDvsCLCL_13CL_Bifi_table)
+OL.CL_13vsCL_DEGs <- row.names(OL.CL_13vsCL_table)
+
+AllDEGs <- unique(sort(c(MDvsCL_DEGs, MDvsCL_13_DEGs, MDvsCLCL_13_DEGs, MDvsCL_Bifi_DEGs, MDvsCLCL_13CL_Bifi_DEGs, AL.MDvsCL_DEGs, AL.MDvsCL_13_DEGs, AL.MDvsCLCL_13_DEGs, AL.MDvsCL_Bifi_DEGs, AL.MDvsCLCL_13CL_Bifi_DEGs, MB.MDvsCL_DEGs, MB.MDvsCL_13_DEGs, MB.MDvsCLCL_13_DEGs, MB.MDvsCL_Bifi_DEGs, MB.MDvsCLCL_13CL_Bifi_DEGs, OL.MDvsCL_DEGs, OL.MDvsCL_13_DEGs, OL.MDvsCLCL_13_DEGs, OL.MDvsCL_Bifi_DEGs, OL.MDvsCLCL_13CL_Bifi_DEGs)))    
+
+AllDEGswCLvsCL_13 <- unique(sort(c(MDvsCL_DEGs, MDvsCL_13_DEGs, MDvsCLCL_13_DEGs, MDvsCL_Bifi_DEGs, MDvsCLCL_13CL_Bifi_DEGs, AL.MDvsCL_DEGs, AL.MDvsCL_13_DEGs, AL.MDvsCLCL_13_DEGs, AL.MDvsCL_Bifi_DEGs, AL.MDvsCLCL_13CL_Bifi_DEGs, MB.MDvsCL_DEGs, MB.MDvsCL_13_DEGs, MB.MDvsCLCL_13_DEGs, MB.MDvsCL_Bifi_DEGs, MB.MDvsCLCL_13CL_Bifi_DEGs, OL.MDvsCL_DEGs, OL.MDvsCL_13_DEGs, OL.MDvsCLCL_13_DEGs, OL.MDvsCL_Bifi_DEGs, OL.MDvsCLCL_13CL_Bifi_DEGs, CL_13vsCL_DEGs, AL.CL_13vsCL_DEGs, MB.CL_13vsCL_DEGs, OL.CL_13vsCL_DEGs)))
+
+All_AL_DEGs <- unique(sort(c(AL.MDvsCL_DEGs, AL.MDvsCL_13_DEGs, AL.MDvsCLCL_13_DEGs, AL.MDvsCL_Bifi_DEGs, AL.MDvsCLCL_13CL_Bifi_DEGs))) 
+All_MB_DEGs <- unique(sort(c(MB.MDvsCL_DEGs, MB.MDvsCL_13_DEGs, MB.MDvsCLCL_13_DEGs, MB.MDvsCL_Bifi_DEGs, MB.MDvsCLCL_13CL_Bifi_DEGs))) 
+All_OL_DEGs <- unique(sort(c(OL.MDvsCL_DEGs, OL.MDvsCL_13_DEGs, OL.MDvsCLCL_13_DEGs, OL.MDvsCL_Bifi_DEGs, OL.MDvsCLCL_13CL_Bifi_DEGs))) 
+
+All_MDvsCL <- unique(sort(c(MDvsCL_DEGs, AL.MDvsCL_DEGs, MB.MDvsCL_DEGs, OL.MDvsCL_DEGs)))
+All_MDvsCL_13 <- unique(sort(c(MDvsCL_13_DEGs, AL.MDvsCL_13_DEGs, MB.MDvsCL_13_DEGs, OL.MDvsCL_13_DEGs))) 
+All_MDvsCL_Bifi <- unique(sort(c(MDvsCL_Bifi_DEGs, AL.MDvsCL_Bifi_DEGs, MB.MDvsCL_Bifi_DEGs, OL.MDvsCL_Bifi_DEGs))) 
+```
+
+## Save the DEG list
+```{r}
+# write.table(AllDEGs, "~/Desktop/AllBrainDEGs.txt", sep="\t")
+```
+
+
+# **Let's repeat the analysis modeling the behavioral maturation group factor**
+```{r, include=FALSE}
+#Set the model formula - Here we test all samples together and then we will take into account that the regions are paired by bee individual. We make one group factor containing all combinations of regions and behaviors
+group <- paste0(Region, Behav)
+design <- model.matrix(~0 + group + Batch)
+
+#Filter low expressed genes
+keep <- filterByExpr(y, design, min.count = 20, min.total.count = 20)
+y <- y[keep,,keep.lib.sizes=FALSE]
+dim(y)
+
+#Now normalize counts
+y=calcNormFactors(y, method = "TMM")
+
+colnames(design)<-make.names(colnames(design))
+v=voom(y,design,plot=TRUE)
+cor=duplicateCorrelation(v,design,block=Design$Sample_ID)
+
+fit=lmFit(v,design,block=Design$Sample_ID, correlation=cor$consensus)
+head(coef(fit))
+```
+
+## **1) What genes are DEGs between the behavioural groups overall?**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+con <- makeContrasts(
+    NursesvsForagers=  (groupALforager + groupMBforager
+        + groupOLforager)/3 - 
+        (groupALnurse + groupMBnurse
+        + groupOLnurse)/3,
+    levels=design)
+fit2=contrasts.fit(fit,con)
+fit2=eBayes(fit2, robust=TRUE)
+
+dt.NvsF <- decideTests(fit2, p=0.05)
+summary(dt.NvsF)
+
+NvsF_table=topTable(fit2,coef="NursesvsForagers",n=Inf, sort="p", p=0.05)
+
+NvsF_table
+
+# Store the DEG list 
+NvsF_DEGs <- row.names(NvsF_table)
+```
+
+# Export region-specific DEG tables to Excel file
+```{r, include=FALSE}
+library(xlsx)
+write.xlsx(NvsF_table, file="Brain_OverallTests-NvsF.xlsx", sheetName="NursesVsForagers", row.names=TRUE)
+```
+
+## **2) Brain-region-specific effects of behavioral maturation?**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+con <- makeContrasts(
+  AL.NvsF=  groupALforager - groupALnurse,
+  MB.NvsF=  groupMBforager - groupMBnurse,
+  OL.NvsF=  groupOLforager - groupOLnurse,
+    levels=design)
+
+fit2=contrasts.fit(fit,con)
+fit2=eBayes(fit2, robust=TRUE)
+
+dt.NvsF_regions <- decideTests(fit2, p=0.05)
+summary(dt.NvsF_regions)
+
+# Plot a venn diagram of the AL.NvsF, MB.NvsF and OL.NvsF comparisons
+# dev.new()
+# pdf("~/Desktop/Venn_DEGs_RegionSpecific_NvsF.pdf",height=4,width=6)  
+vennDiagram(dt.NvsF_regions[,1:3], circle.col=c("turquoise", "salmon", "green"))
+# while (!is.null(dev.list()))  dev.off()
+
+AL.NursesvsForagers_table=topTable(fit2,coef="AL.NvsF",n=Inf, sort="p", p=0.05)
+MB.NursesvsForagers_table=topTable(fit2,coef="MB.NvsF",n=Inf, sort="p", p=0.05)
+OL.NursesvsForagers_table=topTable(fit2,coef="OL.NvsF",n=Inf, sort="p", p=0.05)
+
+# Store the DEG list in a vector
+AL.NvsF_DEGs <- row.names(AL.NursesvsForagers_table)
+MB.NvsF_DEGs <- row.names(MB.NursesvsForagers_table)
+OL.NvsF_DEGs <- row.names(OL.NursesvsForagers_table)
+AllDEGs_Behav <- unique(sort(c(NvsF_DEGs, AL.NvsF_DEGs, MB.NvsF_DEGs, OL.NvsF_DEGs)))
+```
+
+### **Optic lobes - Nurses vs. Foragers**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+OL.NursesvsForagers_table
+```
+
+### **Mushroom bodies - Nurses vs. Foragers**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+MB.NursesvsForagers_table
+```
+
+### **Antennal lobes + subaesophageal ganglion - Nurses vs. Foragers**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+AL.NursesvsForagers_table
+```
+
+# Export brain-region-specific DEG tables to Excel file
+```{r, include=FALSE}
+library(xlsx)
+write.xlsx(AL.NursesvsForagers_table, file="Brain_Region-specificTests-NvsF.xlsx", sheetName="AL.NursesVsForagers", row.names=TRUE)
+write.xlsx(MB.NursesvsForagers_table, file="Brain_Region-specificTests-NvsF.xlsx", sheetName="MB.NursesVsForagers", append=TRUE, row.names=TRUE)
+write.xlsx(OL.NursesvsForagers_table, file="Brain_Region-specificTests-NvsF.xlsx", sheetName="OL.NursesvsForagers", append=TRUE, row.names=TRUE)
+```
+
+## **Venn diagrams to compare overlap in DEG lists**
+```{r, message=FALSE, warning=FALSE}
+# Make a list containing all DEG comparison lists
+DEGs_microbiota_NandF <- list(AllDEGs, AllDEGs_Behav)
+DEGs_NandF_BrainRegions <- list(AL.NvsF_DEGs, MB.NvsF_DEGs, OL.NvsF_DEGs) 
+
+# We can rename our list vectors
+names(DEGs_microbiota_NandF) <- c("Gut microbiota", "Nurses vs. foragers")
+names(DEGs_NandF_BrainRegions) <- c("AL", "MB", "OL")
+
+# Now we can plot a Venn diagram with the VennDiagram R package, as follows:
+require("VennDiagram")
+
+overrideTriple=T
+venn.plot1 <- venn.diagram(DEGs_microbiota_NandF, NULL, euler.d = T, scaled = T, fill=c("darkmagenta", "darkblue"), alpha=c(0.5,0.5), cex = 1.6, cat.fontface=4, category.names=c("Behavioural maturation", "Gut microbiota"), main="Differentially expressed genes by gut microbiota and behavioural maturation")
+
+overrideTriple=T
+venn.plot2 <- venn.diagram(DEGs_NandF_BrainRegions, NULL, euler.d = T, scaled = T, fill=c("darkmagenta", "darkblue", "green"), alpha=c(0.5,0.5,0.5), cex = 1.6, cat.fontface=4, category.names=c("AL", "MB", "OL"), main="Differentially expressed genes in brain by behavioural maturation")
+
+grid.newpage()
+# dev.new()
+# pdf("~/Desktop/Venn_GutMicrobiota_GutVsBrain.pdf",height=4,width=6)  
+p1 <- grid.draw(venn.plot1)
+# dev.off()
+
+grid.newpage()
+# dev.new()
+# pdf("~/Desktop/Venn_GutMicrobiota_BrainRegions.pdf",height=4,width=6)  
+p2 <- grid.draw(venn.plot2)
+# dev.off()
+```
+
+## **We find 11 genes overlapping between the effects of the gut microbiota and behavioral maturation on brain gene expression. We test if this is more than expected by chance, using the full transcriptome as background**
+```{r, warning=FALSE}
+Hyptest = phyper(10, 894, 12374 - 894, 91, lower.tail = FALSE)
+Hyptest
+
+RepresentationFactor = 11/((91*894)/12374)
+RepresentationFactor
+```
+
+## **Session info**
+```{r, warning=FALSE}
+sessionInfo()
+```

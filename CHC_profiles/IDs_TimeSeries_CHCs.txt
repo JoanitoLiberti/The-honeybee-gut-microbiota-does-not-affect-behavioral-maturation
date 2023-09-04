@@ -1,0 +1,109 @@
+Sample_ID	Day	Treatment	Hive	Box	HiveBox	PupaeCollector	Work
+T_1b	0	CL	H4	B1	H4B1	KW	Newly emerged
+T_2b	0	MD	H4	B2	H4B2	JL	Newly emerged
+T_3b	0	MD	H6	B1	H6B1	KW	Newly emerged
+T_4	0	CL	H6	B2	H6B2	JL	Newly emerged
+T_5	0	CL	H8	B1	H8B1	KW	Newly emerged
+T_6	0	MD	H8	B2	H8B2	JL	Nurse transition
+T_7	0	MD	H9	B1	H9B1	KW	Forager
+T_8	0	CL	H9	B2	H9B2	JL	Newly emerged
+T_9	0	CL	H10	B1	H10B1	KW	Newly emerged
+T_10	0	MD	H10	B2	H10B2	JL	Newly emerged
+T_11	0	MD	H2	B1	H2B1	KW	Newly emerged
+T_12	0	CL	H2	B2	H2B2	JL	Newly emerged
+T_13	0	MD	H3	B1	H3B1	YE	Newly emerged
+T_14	0	CL	H3	B2	H3B2	YE	Newly emerged
+T_15	0	MD	H5	B1	H5B1	GB	Newly emerged
+T_16	0	CL	H5	B2	H5B2	GB	Newly emerged
+T_17	0	MD	H7	B1	H7B1	KW	Newly emerged
+T_18	0	CL	H7	B2	H7B2	JL	Nurse transition
+T_19	2	CL	H4	B1	H4B1	KW	Nurse transition
+T_20	2	MD	H4	B2	H4B2	JL	Nurse transition
+T_21	2	MD	H6	B1	H6B1	KW	Nurse transition
+T_22	2	CL	H6	B2	H6B2	JL	Nurse transition
+T_23	2	CL	H8	B1	H8B1	KW	Nurse transition
+T_24	2	MD	H8	B2	H8B2	JL	Nurse transition
+T_25	2	MD	H9	B1	H9B1	KW	Nurse transition
+T_26	2	CL	H9	B2	H9B2	JL	Nurse transition
+T_27	2	CL	H10	B1	H10B1	KW	Nurse transition
+T_28	2	MD	H10	B2	H10B2	JL	Nurse transition
+T_29	2	MD	H2	B1	H2B1	KW	Nurse transition
+T_30	2	CL	H2	B2	H2B2	JL	Nurse transition
+T_31	2	MD	H3	B1	H3B1	YE	Nurse
+T_32	2	CL	H3	B2	H3B2	YE	Nurse
+T_33	2	MD	H5	B1	H5B1	GB	Nurse
+T_34	2	CL	H5	B2	H5B2	GB	Nurse
+T_35	2	MD	H7	B1	H7B1	KW	Nurse
+T_36	2	CL	H7	B2	H7B2	JL	Nurse transition
+T_37	4	CL	H4	B1	H4B1	KW	Nurse
+T_38	4	MD	H4	B2	H4B2	JL	Nurse
+T_39	4	MD	H6	B1	H6B1	KW	Forager transition
+T_40	4	CL	H6	B2	H6B2	JL	Forager transition
+T_41	4	CL	H8	B1	H8B1	KW	Forager transition
+T_42	4	MD	H8	B2	H8B2	JL	Nurse
+T_43	4	MD	H9	B1	H9B1	KW	Forager transition
+T_44	4	CL	H9	B2	H9B2	JL	Nurse
+T_45	4	CL	H10	B1	H10B1	KW	Nurse
+T_46	4	MD	H10	B2	H10B2	JL	Nurse
+T_47	4	MD	H2	B1	H2B1	KW	Nurse
+T_48	4	CL	H2	B2	H2B2	JL	Forager
+T_49	4	MD	H3	B1	H3B1	YE	Nurse
+T_50	4	CL	H3	B2	H3B2	YE	Nurse
+T_51	4	MD	H5	B1	H5B1	GB	Nurse
+T_52	4	CL	H5	B2	H5B2	GB	Nurse
+T_53	4	MD	H7	B1	H7B1	KW	Nurse
+T_54	4	CL	H7	B2	H7B2	JL	Nurse
+T_55	6	CL	H4	B1	H4B1	KW	Forager
+T_56	6	MD	H4	B2	H4B2	JL	Nurse
+T_57	6	MD	H6	B1	H6B1	KW	Nurse
+T_58	6	CL	H6	B2	H6B2	JL	Forager transition
+T_59	6	CL	H8	B1	H8B1	KW	Forager
+T_60	6	MD	H8	B2	H8B2	JL	Nurse
+T_61	6	MD	H9	B1	H9B1	KW	Forager transition
+T_62	6	CL	H9	B2	H9B2	JL	Nurse
+T_63	6	CL	H10	B1	H10B1	KW	Nurse
+T_64	6	MD	H10	B2	H10B2	JL	Nurse
+T_65	6	MD	H2	B1	H2B1	KW	Nurse
+T_66	6	CL	H2	B2	H2B2	JL	Forager
+T_67	6	MD	H3	B1	H3B1	YE	Nurse
+T_68	6	CL	H3	B2	H3B2	YE	Nurse
+T_69	6	MD	H5	B1	H5B1	GB	Forager transition
+T_70	6	CL	H5	B2	H5B2	GB	Nurse
+T_71	6	MD	H7	B1	H7B1	KW	Forager transition
+T_72	6	CL	H7	B2	H7B2	JL	Forager
+T_73	8	CL	H4	B1	H4B1	KW	Forager
+T_74	8	MD	H4	B2	H4B2	JL	Nurse
+T_75	8	MD	H6	B1	H6B1	KW	Forager
+T_76	8	CL	H6	B2	H6B2	JL	Forager
+T_77	8	CL	H8	B1	H8B1	KW	Forager
+T_78	8	MD	H8	B2	H8B2	JL	Nurse
+T_79	8	MD	H9	B1	H9B1	KW	Nurse
+T_80	8	CL	H9	B2	H9B2	JL	Forager
+T_81	8	CL	H10	B1	H10B1	KW	Nurse
+T_82	8	MD	H10	B2	H10B2	JL	Forager
+T_83	8	MD	H2	B1	H2B1	KW	Forager
+T_84	8	CL	H2	B2	H2B2	JL	Forager transition
+T_85	8	MD	H3	B1	H3B1	YE	Forager
+T_86	8	CL	H3	B2	H3B2	YE	Forager
+T_87	8	MD	H5	B1	H5B1	GB	Forager
+T_88	8	CL	H5	B2	H5B2	GB	Forager transition
+T_89	8	MD	H7	B1	H7B1	KW	Nurse
+T_90	8	CL	H7	B2	H7B2	JL	Forager
+T_91	10	CL	H4	B1	H4B1	KW	Nurse
+T_92	10	MD	H4	B2	H4B2	JL	Nurse
+T_93	10	MD	H6	B1	H6B1	KW	Forager transition
+T_94	10	CL	H6	B2	H6B2	JL	Nurse
+T_95	10	CL	H8	B1	H8B1	KW	Forager
+T_96	10	MD	H8	B2	H8B2	JL	Nurse
+T_97	10	MD	H9	B1	H9B1	KW	Forager
+T_98	10	CL	H9	B2	H9B2	JL	Forager
+T_99	10	CL	H10	B1	H10B1	KW	Nurse
+T_100	10	MD	H10	B2	H10B2	JL	Nurse
+T_101	10	MD	H2	B1	H2B1	KW	Forager
+T_102	10	CL	H2	B2	H2B2	JL	Forager
+T_103	10	MD	H3	B1	H3B1	YE	Nurse
+T_104	10	CL	H3	B2	H3B2	YE	Forager
+T_105	10	MD	H5	B1	H5B1	GB	Nurse
+T_106	10	CL	H5	B2	H5B2	GB	Forager transition
+T_107	10	MD	H7	B1	H7B1	KW	Forager
+T_108	10	CL	H7	B2	H7B2	JL	Forager transition

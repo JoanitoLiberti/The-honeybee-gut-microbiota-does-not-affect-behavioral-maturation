@@ -1,0 +1,296 @@
+---
+title: "Reanalysis of Vernier et al. 2020, Science Advances"
+author: "Joanito Liberti, University of Lausanne"
+date: 
+output: github_document
+---
+
+# We analyze data from the live vs. heat-killed inoculum experiment in Vernier et al. 2020 Science Advances
+```{r setup, include = FALSE}
+# Set the working directory (in R notebook the working directory needs to be assigned within a "setup" chunk, or it will only work within the individual chunks in which it was set)
+
+path <- "/Volumes/gr_Engel/lab_resources/Manuscripts/2023_Liberti_Maturation/Code/CHC_profiles/"
+knitr::opts_knit$set(root.dir = normalizePath(path)) 
+```
+
+# Load packages
+```{r}
+library(DESeq2)
+library(ggplot2)
+library(vegan) # ecological diversity analysis
+library(dplyr)
+library(scales) # scale functions for visualizations
+library(grid)
+library(RColorBrewer)
+library(reshape2) # data manipulation package
+library(cowplot)
+library(phyloseq)
+library(tidyverse)
+library(readxl)
+library(genefilter)
+```
+
+# Heatmap of CHC profiles
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+newbee<-read.csv("CHCs_HeatkilledVsLiveExp.csv",row.names = 1) # data underlying Fig. 2E in Vernier et al. 2020 Science Advances - can be found in supplementary file abd3431_data_file_s1.xlsx (https://www.science.org/doi/10.1126/sciadv.abd3431#supplementary-materials)
+bee2<-newbee[,-1]
+bee2 <-bee2[1:(length(bee2)-1)] # Removing last column because it is the row sum
+
+bee2 <- bee2/rowSums(bee2) # Transform into proportions
+
+library(vegan)
+library(ggplot2)
+
+# Microbiome treatment
+microbio<-newbee[,1]
+
+## Heatmap
+### calculate clustering method
+library(dendextend)
+library(colorspace)
+dbee<-dist(bee2,method="euclidean")
+hbee<-hclust(dbee,method="ward")
+
+dend<-as.dendrogram(hbee)
+
+dendSampleOrder <- labels(dend) # Save sample names in the same order as the dendrogram for later
+
+gg_color_hue <- function(n) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]
+}
+
+n = 2
+cols = gg_color_hue(n)
+
+microbio2<-as.factor(microbio)
+labels_colors(dend) <- cols[
+    as.numeric(microbio2)[order.dendrogram(dend)]
+  ]
+
+labels(dend) <- paste(as.character(microbio)[order.dendrogram(dend)],
+                      "(",labels(dend),")", 
+                      sep = "")
+dend <- hang.dendrogram(dend,hang_height=0.1)
+
+dend <- dendextend::set(dend, "labels_cex", 0.5)
+dend %>% dendextend::set("branches_lwd", 1)
+
+par(mar = c(3,3,3,7))
+{plot(dend,  
+     main = "Honeybee CHC-Microbiota: Euclidean distances with Ward's Hierarchical clustering", 
+     horiz =  TRUE,  nodePar = list(cex = .007))
+
+microbio_levels <- c("Heat killed", "Live")
+legend("topleft", legend = microbio_levels, fill = cols)}
+
+# Plot heatmap
+library(gplots)
+library(RColorBrewer)
+
+nb.cols <- 100
+mycolors <- colorRampPalette(brewer.pal(9, "Oranges"))(nb.cols)
+
+microlab<-cols[as.factor(newbee$Treatment)]
+
+dev.new()
+pdf(file="CHCheatmap-LiveVsHeatKilled.pdf",width=4,height=4, pointsize=8)
+{gplots::heatmap.2(as.matrix(bee2), 
+                  main = "Relative percentages clustering of microbiome CHC Honeybees",
+                  srtCol = 90,
+                  dendrogram = "row",
+                  Rowv = dend,
+                  Colv = "NA", # this to make sure the columns are not ordered
+                  trace="none",          
+                  margins =c(5,0.1),      
+                  key.xlab = "Relative Percentage on Cuticle",
+                  RowSideColors = microlab, # to add nice colored strips        
+                  col = mycolors)
+legend("topright", legend = microbio_levels, fill = cols)}
+dev.off()
+
+{gplots::heatmap.2(as.matrix(bee2), 
+                  main = "Relative percentages clustering of microbiome CHC Honeybees",
+                  srtCol = 90,
+                  dendrogram = "row",
+                  Rowv = dend,
+                  Colv = "NA", # this to make sure the columns are not ordered
+                  trace="none",          
+                  margins =c(5,0.1),      
+                  key.xlab = "Relative Percentage on Cuticle",
+                  RowSideColors = microlab, # to add nice colored strips        
+                  col = mycolors)
+legend("topright", legend = microbio_levels, fill = cols)}
+```
+
+## The heatmap reveals bees with two physiologies: nurses and foragers. We can see in the heatmap plot that the distribution of these bee types is unbalanced between gut microbiota treatments. However, the relative contribution of the two factors to the CHC profiles cannot be teased apart because cage replication is insufficient (2 per treatment in this experiment, A and B in sample names).
+
+# NMDS plots
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# We derive nurses and foragers based on the CHC clusters in the heatmap
+NandF<-c(rep("nurse", each=15),rep("forager", each=17))
+NandF<-data.frame(dendSampleOrder,NandF)
+rownames(NandF)<-NandF[,1]
+
+beetr2<-data.frame(bee2,microbio)
+beetr2$Sample_ID <- rownames(beetr2)
+
+beeTest <- merge(beetr2, NandF, by=0, all=TRUE)
+beeTest[,c("Sample_ID","dendSampleOrder")]<-NULL
+rownames(beeTest)<-beeTest[,1]
+beeTest[,1]<-NULL
+beeTest$Cage <- c(rep("Cage1", 8), rep("Cage2", 8),rep("Cage3", 8), rep("Cage4", 8) )
+
+set.seed(68827)
+mds1 <- metaMDS(as.matrix(beeTest[1:(length(beeTest)-3)]), distance="bray", k=2, trymax=100, autotransform=TRUE, noshare=0.1, expand=TRUE, trace=1)
+
+## create table for NMDS X and Y values of chemical compounds
+data.scores<-as.data.frame(scores(mds1)$sites)
+data.scores$site<-rownames(data.scores)
+
+## create table for NMDS X and Y values of individuals
+species.scores<-as.data.frame(scores(mds1,"species"))
+species.scores$species<-rownames(species.scores)
+
+gg_color_hue <- function(n) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]
+}
+
+n = 2
+cols = gg_color_hue(n)
+
+#Graph
+p1 <- ggplot(col = cols) + 
+  geom_point(data=data.scores,aes(x=NMDS1,y=NMDS2,color=beeTest$microbio),size=2) +
+  coord_equal() +
+  theme_bw() +
+  theme(axis.title.x = element_text(size=10), # remove x-axis labels
+        axis.title.y = element_text(size=10), # remove y-axis labels
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank())
+
+p2 <- ggplot(col = cols) + 
+  geom_point(data=data.scores,aes(x=NMDS1,y=NMDS2,color=beeTest$NandF),size=2) +
+  coord_equal() +
+  theme_bw() +
+  color_palette(c("#56B4E9","#E69F00")) +
+  theme(axis.title.x = element_text(size=10), # remove x-axis labels
+        axis.title.y = element_text(size=10), # remove y-axis labels
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank())
+
+library(ggpubr)
+ggarrange(p1, p2, ncol=1)
+ggsave(height=6,width=5,dpi=300, filename="HeatKilledVsLive_ordinations.pdf", useDingbats=FALSE)
+```
+
+# Microbiota stacked barplots
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+df = read.table("SciAdv-Microbiota-heatkilled.txt", header = T, sep="\t") # data underlying Fig. 2D in Vernier et al. 2020 Science Advances - can be found in supplementary file abd3431_data_file_s2.xlsx
+
+df[, -c(1,2)] <- df[ , -c(1,2)]/1794 # Here we divide by 1794 to get proportions as the authors deposited the tables as supplement after rarefying to the same depth
+
+# Here we filter out ASVs that have less than 2% relative abundance in two samples, to make barplots more legible
+f1 <- kOverA(2, 0.02)
+ffun <- filterfun(f1)
+filt1 <- genefilter(t(df[, -c(1,2)]), ffun)
+
+mdf<-df[, -c(1,2)][,filt1]
+
+mdf <- cbind(Sample_ID = df$Sample_ID, Treatment = factor(df$Treatment), mdf)
+
+
+mdf<- reshape(mdf, 
+        direction = "long",
+        varying = list(names(mdf)[3:ncol(mdf)]),
+        v.names = "Value",
+        idvar = c("Sample_ID", "Treatment"),
+        timevar = "ASV", 
+        times = colnames(mdf[3:ncol(mdf)]))
+
+mdf$ASV<-sub("*Firm.5", "Firm 5", mdf$ASV)
+mdf$ASV<-sub("*Firm.4", "Firm 4", mdf$ASV)
+mdf$ASV<-sub("*\\.[0-9]", "", mdf$ASV)
+
+library(RColorBrewer)
+cbPalette<-colorRampPalette(brewer.pal(12, "Paired"))
+
+set.seed(2) # Change the number within parentheses to change the order of colors in the plot. Here we use set.seed to make the colors reproducible, because in scale_fill_manual we use "sample" to shuffle the color order
+
+mdf$Treatment <- factor(mdf$Treatment)
+mdf$ASV <- factor(mdf$ASV)
+
+p3 = ggplot(mdf, aes_string(x = "Sample_ID", y = "Value", fill = "ASV")) +
+  geom_bar(stat = "identity", position = "stack", color = "black") +
+  ylab("Relative abundance") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), legend.position="bottom", strip.background = element_blank()) + # ,  strip.text.x = element_blank()
+  facet_grid(. ~ Treatment, scale="free", space="fixed") +
+  scale_fill_manual(values=sample(cbPalette(16)))  
+
+print(p3, width = 1000, height = 200)
+
+dev.new()
+pdf(file="Barplots_LiveVsHeatKilled.pdf",width=10,height=4, pointsize=4)
+p3
+dev.off()
+```
+
+# We analyze what ASVs are signficantly different between treatment groups by DESeq2
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+df = read.table("SciAdv-Microbiota-heatkilled.txt", header = T, sep="\t") 
+
+# Set plotting theme
+theme_set(theme_bw())
+
+#Create a phyloseq object
+otutab<-df[,-2]
+rownames(otutab)<-otutab[,1]
+otutab[,1]<-NULL
+
+mapping<-df[,c(1,2)]
+rownames(mapping)<-mapping[,1]
+
+taxa<- colnames(otutab)
+taxa<-as.data.frame(taxa)
+rownames(taxa) <- taxa[,1]
+taxa<-as.matrix(taxa)
+
+ps <- phyloseq(otu_table(otutab, taxa_are_rows=FALSE), 
+               sample_data(mapping), 
+               tax_table(taxa))
+
+# Load DESeq2
+library("DESeq2"); packageVersion("DESeq2")
+
+diagdds = phyloseq_to_deseq2(ps, ~Treatment)
+
+# calculate geometric means prior to estimate size factors
+gm_mean = function(x, na.rm=TRUE){
+  exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+}
+geoMeans = apply(counts(diagdds), 1, gm_mean)
+diagdds = estimateSizeFactors(diagdds, geoMeans = geoMeans)
+diagdds = DESeq(diagdds, fitType="local")
+
+res = results(diagdds, cooksCutoff = FALSE)
+alpha = 0.05
+sigtab = res[which(res$padj < alpha), ]
+sigtab = cbind(as(sigtab, "data.frame"), as(tax_table(ps)[rownames(sigtab), ], "matrix"))
+sigtab
+
+write.table(sigtab, "LiveVsHeatKilled-DESeq2.txt", sep="\t")
+```
+
+## Only 5 ASVs mostly representing opportunistic infections have significantly different relative abundances between heat-killed and live inoculation treatments in this experiment. 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# save.image (file = "SciAdvReanalysis.RData")
+sessionInfo()
+```
+
+

@@ -1,0 +1,241 @@
+---
+title: "Differential gene expression analysis of the gut of gnotobiotic honey bees"
+author: "Joanito Liberti, University of Lausanne"
+date: 
+output: github_document
+---
+
+# **Set the working directory (in R notebook the working directory needs to be assigned within a "setup" chunk, or it will only work within the individual chunks in which it was set)**
+```{r setup}
+path <- "/Volumes/gr_Engel/lab_resources/Manuscripts/2023_Liberti_Maturation/Code/RNA-seq"
+knitr::opts_knit$set(root.dir = normalizePath(path)) 
+```
+
+## Read in count table and metadata in R
+```{r, echo=T, results='hide', message=F, warning=F}
+count.table <- read.table("RNAseq_gut_counts.txt", header = T)
+count.table
+
+Design <- read.table("RNAseq_gut_metadata_NandF.txt", header = T, colClasses = "factor")
+row.names(Design) <- Design$Sample_ID 
+Design
+
+# We make sure the order of the columns (Sample_IDs) in the count table match the metadata table
+library(data.table)
+count.table <- as.data.frame(count.table)
+count.table <- setcolorder(count.table, as.character(Design$Sample_ID))
+```
+
+## DEG analysis with edgeR/Limma/Voom
+## In depth analyses of the effect of the gut microbiota on gut gene expression from this same dataset have been previously published (Liberti, J., Kay, T., Quinn, A. et al. The gut microbiota affects the social network of honeybees. Nat Ecol Evol 6, 1471–1479 (2022). https://doi.org/10.1038/s41559-022-01840-w), and analysis codes are available at https://github.com/JoanitoLiberti/The-gut-microbiota-affects-the-social-network-of-honeybees.
+## Here we repeat these analyses by gut microbiota treatment to then compare the lists of DEGs with those we now obtain for the behavioral maturation factor. Please download the GCF_003254395.2_Amel_HAv3.1_genomic.gtf.gz file from https://github.com/JoanitoLiberti/The-gut-microbiota-affects-the-social-network-of-honeybees/blob/master/RNA-sequencing/GCF_003254395.2_Amel_HAv3.1_genomic.gtf.gz
+```{r, results='hide', message=F, warning=F}
+library(edgeR)
+y=DGEList(counts=count.table)
+
+## Load annotation from gff file 
+library(rtracklayer)
+my_tags <- c("gene_id", "description", "transcript_id", "product")
+df1 <- readGFF("/Users/joanitoliberti/Downloads/genome_assemblies_genome_gtf/ncbi-genomes-2020-12-28/GCF_003254395.2_Amel_HAv3.1_genomic.gtf", tags = my_tags)
+head(df1)
+df2 <- df1[,c("gene_id", "transcript_id")] 
+df2 <- df2[!duplicated(df2), ]
+
+delete.na <- function(DF, n=0) {
+  DF[rowSums(is.na(DF)) <= n,]
+}
+df2<-delete.na(df2)
+
+df3 <- df1[,c("gene_id", "product")] 
+df3 <- transform(df3, n=nchar(as.character(product)))
+df3 <- delete.na(df3)
+df3 <- df3[with(df3, order(gene_id, n, decreasing = T)), ]
+df3$n <- NULL
+df3 <- df3[!duplicated(df3$gene_id), ]
+df3$product <- sub(" isoform.*", "", df3$product)
+df3$product <- sub(", transcript.*", "", df3$product)
+df3$product <- sub(" precursor.*", "", df3$product)
+
+annot<-df3[df3$gene_id%in%row.names(y),] 
+annot <- annot[order(match(annot[,"gene_id"],row.names(y))),]
+
+setdiff(row.names(y), annot$gene_id) # check that there are no differences between row names of y and merged annotation, otherwise it will not work to add the annotation to the DGElist 
+
+# Append annotation to DGElist
+gen <- as.data.frame(annot$product)
+names(gen)[names(gen) == "annot$product"] <- "description"
+y$genes <- gen
+
+Hive=factor(Design$Hive)
+Batch=factor(Design$Batch)
+Behav=factor(Design$NandF)
+Bee_ID=factor(Design$Sample_ID)
+Treatment <- relevel(Design$Treatment, "MD")
+Treat=factor(Treatment)
+```
+
+## **Build the model**
+```{r, message=F, warning=F}
+#Set the model formula
+design <- model.matrix(~0 + Treat + Batch)
+
+#Filter low expressed genes
+keep <- filterByExpr(y, design, min.count = 20, min.total.count = 20)
+y <- y[keep,,keep.lib.sizes=FALSE]
+dim(y)
+
+#Now normalize counts
+y=calcNormFactors(y, method = "TMM")
+
+colnames(design)<-make.names(colnames(design))
+v=voom(y,design,plot=TRUE)
+
+fit=lmFit(v,design)
+head(coef(fit))
+```
+
+### **1) What genes are DEGs between the treatments overall? MD = microbiota-depleted, CL_Bifi = colonization with only Bifidobacterium, CL_13 = colonization with a community of 13 strains grown on plates, CL = colonization with a gut homogenate from 5 nurse bees**
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+con <- makeContrasts(
+   MDvsCL=  TreatCL - TreatMD,
+   MDvsCL_13=  TreatCL_13 - TreatMD,
+   MDvsCLCL_13=  (TreatCL_13 + TreatCL)/2 - TreatMD,
+   MDvsCL_Bifi=  TreatCL_Bifi - TreatMD,
+   MDvsCLCL_13CL_Bifi=  (TreatCL_13 + TreatCL)/2 - TreatMD,
+   CL_13vsCL=  TreatCL - TreatCL_13,
+    levels=design)
+
+fit2=contrasts.fit(fit,con)
+fit2=eBayes(fit2, robust=TRUE)
+
+dt.Treat <- decideTests(fit2, p=0.05)
+summary(dt.Treat)
+
+MDvsCL_table=topTable(fit2,coef="MDvsCL",n=Inf, sort="p", p=0.05)
+MDvsCL_13_table=topTable(fit2,coef="MDvsCL_13",n=Inf, sort="p", p=0.05)
+MDvsCLCL_13_table=topTable(fit2,coef="MDvsCLCL_13",n=Inf, sort="p", p=0.05)
+MDvsCL_Bifi_table=topTable(fit2,coef="MDvsCL_Bifi",n=Inf, sort="p", p=0.05)
+MDvsCLCL_13CL_Bifi_table=topTable(fit2,coef="MDvsCLCL_13CL_Bifi",n=Inf, sort="p", p=0.05)
+CL_13vsCL_table=topTable(fit2,coef="CL_13vsCL",n=Inf, sort="p", p=0.05)
+
+# Store the DEG list of each comparison in a vector 
+MDvsCL_DEGs <- row.names(MDvsCL_table)
+MDvsCL_13_DEGs <- row.names(MDvsCL_13_table)
+MDvsCLCL_13_DEGs <- row.names(MDvsCLCL_13_table)
+MDvsCL_Bifi_DEGs <- row.names(MDvsCL_Bifi_table)
+MDvsCLCL_13CL_Bifi_DEGs <- row.names(MDvsCLCL_13CL_Bifi_table)
+CL_13vsCL_DEGs <- row.names(CL_13vsCL_table)
+AllDEGs <- unique(sort(c(MDvsCL_DEGs, MDvsCL_13_DEGs, MDvsCLCL_13_DEGs, MDvsCL_Bifi_DEGs, MDvsCLCL_13CL_Bifi_DEGs)))
+```
+
+### Save the DEG list 
+```{r, eval=FALSE}
+# write.table(AllDEGs, "~/Desktop/Gut_allDEGs.txt", sep="\t", col.names=NA)
+```
+
+
+# **Let's repeat the analysis modelling only the behavioral maturation group factor**
+```{r, include=FALSE}
+#Set the modeel formula 
+design <- model.matrix(~0 + Behav + Batch)
+
+#Filter low expressed genes
+keep <- filterByExpr(y, design, min.count = 30, min.total.count = 20)
+y <- y[keep,,keep.lib.sizes=FALSE]
+dim(y)
+
+#Now normalize counts
+y=calcNormFactors(y, method = "TMM")
+
+colnames(design)<-make.names(colnames(design))
+v=voom(y,design,plot=TRUE)
+
+fit=lmFit(v,design)
+head(coef(fit))
+```
+
+
+## **1) What genes are DEGs between the behavioral groups overall?**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+con <- makeContrasts(
+    NursesvsForagers=  Behavforager - Behavnurse,
+    levels=design)
+fit2=contrasts.fit(fit,con)
+fit2=eBayes(fit2, robust=TRUE)
+
+dt.NvsF <- decideTests(fit2, p=0.05)
+summary(dt.NvsF)
+
+NvsF_table=topTable(fit2,coef="NursesvsForagers",n=Inf, sort="p", p=0.05)
+
+NvsF_table
+
+# Store the DEG list in a vector
+NvsF_DEGs <- row.names(NvsF_table)
+```
+
+# Export region-specific DEG tables to Excel file 
+```{r, include=FALSE}
+library(xlsx)
+write.xlsx(NvsF_table, file="Gut_OverallTests-NvsF.xlsx", sheetName="NursesVsForagers", row.names=TRUE)
+```
+
+
+## **Venn diagrams to compare overlap in DEG lists of the treatments (from modelling only treatment) and the behaviour (from modelling only behaviour)**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+# Make a list containing all DEG comparison lists
+DEGs_TreatVsBehavOverall <- list(AllDEGs, NvsF_DEGs)
+
+# We can rename our list vectors
+names(DEGs_TreatVsBehavOverall) <- c("Treatment", "Behavioral maturation")
+
+# Now we can plot a Venn diagram with the VennDiagram R package, as follows:
+require("VennDiagram")
+venn.plot <- venn.diagram(DEGs_TreatVsBehavOverall, NULL, fill=c("darkmagenta", "green"), alpha=c(0.5,0.5), cex = 1.6, cat.fontface=4, category.names=c("Treatment", "Behavioral maturation"), main="Differentially expressed genes")
+
+
+# To plot the venn diagram we will use the grid.draw() function 
+grid.newpage()
+pdf("Venn_Gut_RNA-seq.pdf",height=4,width=6)
+p1 <- grid.draw(venn.plot)
+dev.off()
+
+# To get the list of gene present in each Venn compartment we can use the gplots package
+require("gplots")
+a <- venn(DEGs_TreatVsBehavOverall, show.plot=FALSE)
+
+# By inspecting the structure of the a object created, 
+# you notice two attributes: 1) dimnames 2) intersections
+# We can store the intersections in a new object named inters
+inters <- attr(a,"intersections")
+
+library(ggplotify)
+pvenn <- grobTree(venn.plot)
+pvenn <- as.ggplot(pvenn) # This is needed if one wants to add the plot to a multi-panel figure
+pvenn
+```
+
+## **We find 1 gene overlapping between treatment and behaviour DEGs. That's not a significant overlap**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+## x = # of genes in common between two groups. 
+## n = # of genes in group 1. 
+## D = # of genes in group 2. 
+## N = # total genes, in this case the 15853 genes in the Amel 4.5 genome version used.
+## C(a,b) is the number of combinations of a things taken b at a time.
+
+## Expected = (n * D) / N # expected number of genes
+## The representation factor = x / Expected  
+
+Hyptest = phyper(1, 4988, 12374 - 4988, 15, lower.tail = FALSE)
+Hyptest
+
+RepresentationFactor = 1/((15*4988)/12374)
+RepresentationFactor
+```
+
+
+## **Session info**
+```{r, echo=T, message=F, warning=F}
+sessionInfo()
+```

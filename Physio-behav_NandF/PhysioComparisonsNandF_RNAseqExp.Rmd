@@ -1,0 +1,120 @@
+---
+title: "Physiological comparisons between CHC-classified nurses and foragers in the RNA-sequencing experiment"
+author: "Joanito Liberti, University of Lausanne"
+date: 
+output: github_document
+---
+
+## **Set the working directory (in R notebook the working directory needs to be assigned within a "setup" chunk, or it will only work within the individual chunks in which it was set)**
+```{r setup}
+path <- "/Volumes/gr_Engel/lab_resources/Manuscripts/2023_Liberti_Maturation/Code/"
+knitr::opts_knit$set(root.dir = normalizePath(path)) 
+```
+
+## **Load the data**  
+## Data frame containing sample information from the RNA-seq experiment in Liberti, J., Kay, T., Quinn, A. et al. The gut microbiota affects the social network of honeybees. Nat Ecol Evol 6, 1471–1479 (2022). https://doi.org/10.1038/s41559-022-01840-w). The metadata, containing also Actin copy numbers, was downloaded from https://github.com/JoanitoLiberti/The-gut-microbiota-affects-the-social-network-of-honeybees/blob/master/Gut_microbiota/qPCR/RNAseqExp_gut_qPCRdata.csv
+```{r, echo=T, message=F, warning=F}
+samdf = read.csv("/Users/joanitoliberti/Downloads/RNAseqExp_gut_qPCRdata.csv", header = T, fill=TRUE, na.strings=c(""," ","NA")) # fill=TRUE allows to read a table with missing entries
+rownames(samdf) = samdf$Bee_ID
+samdf$Hive <- NULL
+samdf$Box <- NULL
+samdf$Treatment <- NULL
+
+chc_scores <- read.csv("/Volumes/gr_Engel/lab_resources/Manuscripts/2023_Liberti_Maturation/Code/CHC_profiles/IDs_RNAseq_CHCs.csv", header = T, fill=TRUE,  na.strings=c(""," ","NA"))
+rownames(chc_scores) = chc_scores$Sample_ID
+
+
+weights <- read.csv("/Volumes/gr_Engel/lab_resources/Manuscripts/2023_Liberti_Maturation/Code/Weight/Weights_RNAseqExp.csv", header = T, fill=TRUE,  na.strings=c(""," ","NA"))
+rownames(weights) = weights$Bee_ID
+weights$Hive <- NULL
+weights$Box <- NULL
+weights$Treatment <- NULL
+
+dt<-merge(samdf,weights,  fill=T)
+rownames(dt) <- dt$Bee_ID
+dt<-merge(dt,chc_scores, by=0, fill=T)
+```
+
+## Plots
+```{r, echo=T, message=F, warning=F}
+dt$NandF <- as.factor(dt$NandF)
+
+library(ggplot2)
+library(ggbeeswarm)
+library(magrittr)
+library(ggpubr)
+library(scales)
+
+
+dt$Treatment <- factor(dt$Treatment, levels= c("MD","CL_Bifi", "CL_13", "CL"))
+
+give.n <- function(x){return(c(y = 5.7, label = length(x))) # experiment with the multiplier to find the perfect position
+}
+pq1 <- ggplot(subset(dt, !is.na(NandF)), aes(x = factor(NandF, levels=c("Nurse", "Forager")), y = actin_CopyNum))+ 
+  geom_beeswarm(aes(colour = NandF),cex=3) +
+  geom_boxplot(outlier.shape = NA, alpha=0)+
+  scale_x_discrete()+ 
+  scale_y_log10()+
+  annotation_logticks(base = 10, sides = "l", scaled = TRUE,
+                      short = unit(0.05, "cm"), mid = unit(0.1, "cm"), long = unit(0.2, "cm"),
+                      colour = "black", size = 0.5, linetype = 1, alpha = 1, color = NULL)+
+  ylab("Actin copies per gut") +
+  stat_summary(fun.data = give.n, geom = "text") + # add number of observations
+  scale_color_manual(values = c('Nurse' = '#E69F00', 'Forager' = '#56B4E9'))+ # colors
+  theme_bw()
+print(pq1)
+
+give.n <- function(x){return(c(y = 1.36, label = length(x))) # experiment with the multiplier to find the perfect position
+}
+pq2 <- ggplot(subset(dt, !is.na(NandF)), aes(x = factor(NandF, levels=c("Nurse", "Forager")), y = Gut_weight_mg))+ 
+  geom_beeswarm(aes(colour = NandF),cex=3) +
+  geom_boxplot(outlier.shape = NA, alpha=0)+
+  scale_x_discrete()+ 
+  scale_y_log10()+
+  annotation_logticks(base = 10, sides = "l", scaled = TRUE,
+                      short = unit(0.05, "cm"), mid = unit(0.1, "cm"), long = unit(0.2, "cm"),
+                      colour = "black", size = 0.5, linetype = 1, alpha = 1, color = NULL)+
+  ylab("Gut weight (mg)") +
+  stat_summary(fun.data = give.n, geom = "text") + # add number of observations
+  scale_color_manual(values = c('Nurse' = '#E69F00', 'Forager' = '#56B4E9'))+ # colors
+  theme_bw()
+print(pq2)
+
+give.n <- function(x){return(c(y = 1.96, label = length(x))) # experiment with the multiplier to find the perfect position
+}
+pq3 <- ggplot(subset(dt, !is.na(NandF)), aes(x = factor(NandF, levels=c("Nurse", "Forager")), y = Bee_weight_mg))+ 
+  geom_beeswarm(aes(colour = NandF),cex=3) +
+  geom_boxplot(outlier.shape = NA, alpha=0)+
+  scale_x_discrete()+ 
+  scale_y_log10()+
+  annotation_logticks(base = 10, sides = "l", scaled = TRUE,
+                      short = unit(0.05, "cm"), mid = unit(0.1, "cm"), long = unit(0.2, "cm"),
+                      colour = "black", size = 0.5, linetype = 1, alpha = 1, color = NULL)+
+  ylab("Body weight (mg)") +
+  stat_summary(fun.data = give.n, geom = "text") + # add number of observations
+  scale_color_manual(values = c('Nurse' = '#E69F00', 'Forager' = '#56B4E9'))+ # colors
+  theme_bw()
+print(pq3)
+
+ggarrange(pq3, pq2,pq1, ncol=3, common.legend = TRUE, legend="bottom")
+ggsave(height=5,width=7,dpi=300, filename="ActinAndWeight_FvsN.pdf", useDingbats=FALSE)
+```
+
+## Statistical analyses
+```{r, echo=T, message=F, warning=F}
+dt$Hive <- factor(dt$Hive)
+dt$HiveBox <- factor(dt$HiveBox)
+
+library(lmerTest)
+resul <- lmer(dt$Bee_weight_g ~ dt$NandF + (1|dt$Hive:dt$HiveBox))
+summary(resul)
+anova(resul)
+
+resul <- lmer(dt$Gut_weight_mg ~ dt$NandF + (1|dt$Hive:dt$HiveBox))
+summary(resul)
+anova(resul)
+
+resul <- lmer(log(dt$actin_CopyNum) ~ dt$NandF + (1|dt$Hive:dt$HiveBox))
+summary(resul)
+anova(resul)
+```

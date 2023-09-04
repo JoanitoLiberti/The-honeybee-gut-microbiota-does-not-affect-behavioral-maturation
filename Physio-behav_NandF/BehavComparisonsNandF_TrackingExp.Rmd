@@ -1,0 +1,235 @@
+---
+title: "Behavioral comparisons between CHC-classified nurses and foragers in the automated behavioral tracking experiment"
+author: "Joanito Liberti, University of Lausanne"
+date: 
+output: github_document
+---
+
+# **Set the working directory (in R notebook the working directory needs to be assigned within a "setup" chunk, or it will only work within the individual chunks in which it was set)**
+```{r setup}
+path <- "/Volumes/gr_Engel/lab_resources/Manuscripts/2023_Liberti_Maturation/Code/"
+knitr::opts_knit$set(root.dir = normalizePath(path)) 
+```
+
+```{r}
+# Data frame containing sample information - we use the published data from Liberti, J., Kay, T., Quinn, A. et al. The gut microbiota affects the social network of honeybees. Nat Ecol Evol 6, 1471–1479 (2022). https://doi.org/10.1038/s41559-022-01840-w). Data downloaded from https://github.com/JoanitoLiberti/The-gut-microbiota-affects-the-social-network-of-honeybees/blob/master/Gut_microbiota/Amplicon-sequencing/GutMicrobiota_BeeTracking_metadata.txt
+samdf = read.table("/Users/joanitoliberti/Downloads/GutMicrobiota_BeeTracking_metadata.txt", header = T, fill=TRUE,  sep="\t", na.strings=c(""," ","NA")) # fill=TRUE allows to read a table with missing entries
+rownames(samdf) = samdf$Sample_ID
+
+chc_scores <- read.csv("/Volumes/gr_Engel/lab_resources/Manuscripts/2023_Liberti_Maturation/Code/CHC_profiles/IDs_BeeTracking_CHCs.csv", header = T, fill=TRUE,  na.strings=c(""," ","NA"))
+chc_scores$Replicate <- NULL
+chc_scores$Treatment <- NULL
+
+samdf$Sample_ID<-c("1","2","3","4","5","6","7","8","9","10","11",
+                   "12","13","14","15","16","17","18","19","20","21","22",
+                   "23","24","25","26","27","28","29","30","31","32","33",
+                   "34","35","36","37","38","39","40","41","42","43","44",
+                   "45","46","47","48","49","50","51","52","53","54","55",
+                   "56","57","58","59","60","61","62","63","64","65","66",
+                   "67","68","69","70","71","72","73","74","75","76","77",
+                   "78","79","80","81","82","83","84","85","86","87","88",
+                   "89","90","91","92","93","94","95","96","97","98","99",
+                   "100","101","102","103","104","105","106","107","108","109","110",
+                   "111","112","113","114","115","116","117","118","119","120","121",
+                   "122","123","124","125","126","127","128","129","130","131","132",
+                   "133","134","135","136","137","138","139","140","141","142","143",
+                   "144","145","146","147","148","149","150","151","152","153","154",
+                   "155","156","157","158","159","160","161","162","163","164","165",
+                   "166","167","168","169","170","171","172","173","174","175","176",
+                   "177","178","179","180","181","182","183","184","185","186","187",
+                   "188","189","MOCK","H2O_1","H2O_3","CLH_inoc","H2O_2")
+rownames(samdf) = samdf$Sample_ID
+
+dt<-merge(samdf,chc_scores, by="Sample_ID", all=T)
+
+```
+
+
+```{r}
+dt <- subset(dt, Treatment=="MD" | Treatment=="CL")
+dt$NandF <- as.factor(dt$NandF)
+
+dt$Treatment <- factor(dt$Treatment, levels= c("MD","CL"))
+
+give.n <- function(x){return(c(y = -0.7, label = length(x))) # experiment with the multiplier to find the perfect position
+}
+pq7 <- ggplot(subset(dt, !is.na(NandF)), aes(x = factor(NandF, levels=c("Nurse", "Forager")), y = HH/Tot))+ 
+  geom_beeswarm(aes(colour = NandF),cex=1.5) +
+  geom_boxplot(outlier.shape = NA, width = 0.3, alpha=0)+
+  scale_x_discrete()+ 
+  scale_y_log10()+
+  annotation_logticks(base = 10, sides = "l", scaled = TRUE,
+                      short = unit(0.05, "cm"), mid = unit(0.1, "cm"), long = unit(0.2, "cm"),
+                      colour = "black", size = 0.5, linetype = 1, alpha = 1, color = NULL)+
+  stat_summary(fun.data = give.n, geom = "text") + # add number of observations
+  ylab("Normalized head-to-head interactions") +
+  scale_color_manual(values = c('Nurse' = '#E69F00', 'Forager' = '#56B4E9'))+
+  theme_bw()
+print(pq7)
+```
+
+# We add the time at first foraging trip and assess its relation with the CHC-based classification
+## The samples are labeled with the old version of the tagIDs, while we have the corresponding behavioral data with the "ant_IDs" assigned by the tracking system for each sub-colony. We therefore need to convert the old tagIds into the new tagIds (tagDecimalValues) and then into the ant_IDs before we can merge the CHC and behavioural data. The "Conversion_XX.csv" files should be downloaded from the Zenodo repository at https://zenodo.org/record/5797980
+```{r}
+setwd("~/Downloads/")
+dm<-read.csv("/Volumes/gr_Engel/lab_resources/Manuscripts/2023_Liberti_Maturation/Code/Automated_tracking/AllForagingData.csv")
+dm$rep[dm$rep=="1C"]<-"1"
+dm$rep[dm$rep=="1D"]<-"2"
+dm$rep[dm$rep=="2C"]<-"3"
+dm$rep[dm$rep=="2D"]<-"4"
+dm$rep[dm$rep=="3D"]<-"5"
+dm$rep[dm$rep=="3C"]<-"6"
+dm$rep[dm$rep=="4C"]<-"7"
+dm$rep[dm$rep=="4D"]<-"8"
+dm$rep[dm$rep=="5D"]<-"9"
+dm$rep[dm$rep=="5C"]<-"10"
+dm$rep[dm$rep=="6D"]<-"11"
+dm$rep[dm$rep=="6C"]<-"12"
+dm$rep[dm$rep=="7D"]<-"13"
+dm$rep[dm$rep=="7C"]<-"14"
+dm$rep[dm$rep=="8D"]<-"15"
+dm$rep[dm$rep=="8C"]<-"16"
+dm$rep[dm$rep=="9D"]<-"17"
+dm$rep[dm$rep=="9C"]<-"18"
+
+dm$tagcol <- paste0(dm$rep, "_", dm$bee)
+
+conversion1C <- read.csv("Conversion_1C.csv")
+conversion1C$tagcol <- paste0("1", "_", conversion1C$antID)
+conversion1D <- read.csv("Conversion_1D.csv")
+conversion1D$tagcol <- paste0("2", "_", conversion1D$antID)
+conversion2C <- read.csv("Conversion_2C.csv")
+conversion2C$tagcol <- paste0("3", "_", conversion2C$antID)
+conversion2D <- read.csv("Conversion_2D.csv")
+conversion2D$tagcol <- paste0("4", "_", conversion2D$antID)
+conversion3C <- read.csv("Conversion_3C.csv")
+conversion3C$tagcol <- paste0("6", "_", conversion3C$antID)
+conversion3D <- read.csv("Conversion_3D.csv")
+conversion3D$tagcol <- paste0("5", "_", conversion3D$antID)
+conversion4C <- read.csv("Conversion_4C.csv")
+conversion4C$tagcol <- paste0("7", "_", conversion4C$antID)
+conversion4D <- read.csv("Conversion_4D.csv")
+conversion4D$tagcol <- paste0("8", "_", conversion4D$antID)
+conversion5C <- read.csv("Conversion_5C.csv")
+conversion5C$tagcol <- paste0("10", "_", conversion5C$antID)
+conversion5D <- read.csv("Conversion_5D.csv")
+conversion5D$tagcol <- paste0("9", "_", conversion5D$antID)
+conversion6C <- read.csv("Conversion_6C.csv")
+conversion6C$tagcol <- paste0("12", "_", conversion6C$antID)
+conversion6D <- read.csv("Conversion_6D.csv")
+conversion6D$tagcol <- paste0("11", "_", conversion6D$antID)
+conversion7C <- read.csv("Conversion_7C.csv")
+conversion7C$tagcol <- paste0("14", "_", conversion7C$antID)
+conversion7D <- read.csv("Conversion_7D.csv")
+conversion7D$tagcol <- paste0("13", "_", conversion7D$antID)
+conversion8C <- read.csv("Conversion_8C.csv")
+conversion8C$tagcol <- paste0("16", "_", conversion8C$antID)
+conversion8D <- read.csv("Conversion_8D.csv")
+conversion8D$tagcol <- paste0("15", "_", conversion8D$antID)
+conversion9C <- read.csv("Conversion_9C.csv")
+conversion9C$tagcol <- paste0("18", "_", conversion9C$antID)
+conversion9D <- read.csv("Conversion_9D.csv")
+conversion9D$tagcol <- paste0("17", "_", conversion9D$antID)
+
+conversion <- rbind(conversion1C, 
+                    conversion1D, 
+                    conversion2C, 
+                    conversion2D, 
+                    conversion3C, 
+                    conversion3D, 
+                    conversion4C, 
+                    conversion4D, 
+                    conversion5C, 
+                    conversion5D, 
+                    conversion6C, 
+                    conversion6D, 
+                    conversion7C, 
+                    conversion7D, 
+                    conversion8C, 
+                    conversion8D,
+                    conversion9C, 
+                    conversion9D)
+
+
+dd <- merge(dm, conversion, by="tagcol")
+dd$Sample_ID <- paste0(dd$rep, ".", dd$tagDecimalValue)
+```
+
+## Convert the old tag IDs that are used as sample names in the dataset into the new ones and merge with the behavioral data
+```{r}
+library(dplyr)
+library(tidyr)
+
+dt$Exp_ID_old <- dt$Exp_ID
+dt <- dt %>% separate(Exp_ID, c('Subcolony', 'OldTagID'))
+
+source("~/Downloads/to_FORT_tag36ARTag_ID.r")
+
+correctedID <- c()
+for(ID in dt$OldTagID){
+  correctedID <- c(correctedID, to_FORT_tag36ARTag_ID(ID))
+}
+dt$corrected <- correctedID-1
+
+dt$Sample_ID <- paste0(dt$Subcolony, ".", dt$corrected)
+
+df <- merge(dd, dt, by="Sample_ID", fill=T)
+
+df$first <- as.numeric(df$first/3600)
+df$first <- (df$first + 83)/24 # To calculate the age of the bee (in days) when performing the first trip, rather than the time since the start of the experiment, we add 83 h (bees emerged on average at 1 PM on Sunday and we started tracking them at midnight on Wednesday)
+
+give.n <- function(x){return(c(y = -0.2, label = length(x))) # experiment with the multiplier to find the perfect position
+}
+pq8 <- ggplot(subset(df, !is.na(NandF)), aes(x = factor(NandF, levels=c("Nurse", "Forager")), y = log10(trips+1)))+ 
+  geom_beeswarm(aes(colour = NandF),cex=0.7) +
+  geom_boxplot(outlier.shape = NA, width = 0.3, alpha=0)+
+  scale_x_discrete()+ 
+  ylab("Log10 (Foraging trips + 1)") +
+  stat_summary(fun.data = give.n, geom = "text") + # add number of observations
+  scale_color_manual(values = c('Nurse' = '#E69F00', 'Forager' = '#56B4E9'))+
+  theme_bw()
+print(pq8)
+
+give.n <- function(x){return(c(y = 3, label = length(x))) # experiment with the multiplier to find the perfect position
+}
+pq10 <- ggplot(subset(df, !is.na(NandF)), aes(x = factor(NandF, levels=c("Nurse", "Forager")), y = first))+ 
+  geom_beeswarm(aes(colour = NandF),cex=0.7) +
+  geom_boxplot(outlier.shape = NA, width = 0.3, alpha=0)+
+  scale_x_discrete()+ 
+  ylab("Age at first foraging trip (days)") +
+  stat_summary(fun.data = give.n, geom = "text") + # add number of observations
+  scale_color_manual(values = c('Nurse' = '#E69F00', 'Forager' = '#56B4E9'))+
+  theme_bw()
+print(pq10)
+
+ggarrange(pq7,pq8,pq10, nrow=1, common.legend = TRUE, legend="bottom")
+ggsave(height=5,width=7,dpi=300, filename="InteractionsTripsAndOnset_FvsN.pdf", useDingbats=FALSE)
+```
+
+# Stats 
+```{r}
+library(lmerTest)
+
+df$nest <- factor(paste0(df$Treatment, df$Replicate))
+df$Replicate <- factor(df$Replicate)
+dt1<-subset(df, !is.na(NandF))
+dt1<-subset(dt1, !is.na(HH))
+
+resul <- lmer(dt1$HH/dt1$Tot ~ dt1$NandF  + (1|dt1$Replicate:dt1$nest))
+summary(resul)
+anova(resul)
+
+dt2<-subset(df, !is.na(NandF))
+dt2<-subset(dt2, !is.na(trips))
+resul <- lmer(log10(dt2$trips+1) ~ dt2$NandF  + (1|dt2$Replicate:dt2$nest))
+summary(resul)
+anova(resul)
+
+dt3<-subset(df, !is.na(NandF))
+dt3<-subset(dt3, !is.na(first))
+dt3$nest <- factor(paste0(dt3$Treatment, dt3$Replicate))
+resul<- lmer(first ~ NandF + (1|Replicate:nest) , data=dt3)
+summary(resul)
+anova(resul)
+```
+

@@ -1,0 +1,5 @@
+## The current folder contains the scripts used in the analyses of foraging behavior under the automated behavioral tracking systems.
+
+The R code "ForagingCalculations.R" uses the published data from the automated behavioral tracking experiment as input and produces a data table containing foraging behavioral metrics for individual bees: "AllForagingData.csv". This table is then used as input by the "PlotsAndStats_Foraging.Rmd" script for plotting and statistical analyses. 
+
+Set paths within analysis scripts to match the location of the downloaded files on your local drive.

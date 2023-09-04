@@ -1,0 +1,111 @@
+---
+title: "Plots and statistical analyses of foraging behaviors in the automated behavioral tracking experiment"
+author: "Joanito Liberti"
+output: github_document
+---
+
+```{r setup}
+path <- "/Volumes/gr_Engel/lab_resources/Manuscripts/2023_Liberti_Maturation/Code/Automated_tracking/"
+knitr::opts_knit$set(root.dir = normalizePath(path)) 
+```
+
+## Load data
+```{r, echo=T, results='hide', message=F, warning=F}
+dd<-read.csv("AllForagingData.csv")
+
+library(plyr)
+trip<-ddply(dd, .(rep), summarize, mean=mean(trips))
+trip$Treatment <- factor(c("CL", "MD", "CL", "MD", "CL", "MD", "CL", "MD", "CL", "MD", "CL", "MD", "CL", "MD", "CL", "MD", "CL", "MD" ))
+trip$Replicate <- factor(c("1", "1", "2", "2", "3", "3", "4", "4", "5", "5", "6", "6", "7", "7", "8", "8", "9", "9"))
+
+dd$first <- dd$first/3600 # Change time from seconds to hours
+dd$first <- (dd$first + 83)/24 # To calculate the age of the bee (in days) when performing the first trip, rather than the time since the start of the experiment, we add 83 h (bees emerged on average at 1 PM on Sunday and we started tracking them at midnight on Wednesday)
+agetrip<-ddply(dd, .(rep), summarize, mean=mean(first, na.rm=TRUE))
+agetrip$Treatment <- factor(c("CL", "MD", "CL", "MD", "CL", "MD", "CL", "MD", "CL", "MD", "CL", "MD", "CL", "MD", "CL", "MD", "CL", "MD" ))
+agetrip$Replicate <- factor(c("1", "1", "2", "2", "3", "3", "4", "4", "5", "5", "6", "6", "7", "7", "8", "8", "9", "9"))
+
+space<-ddply(dd, .(rep), summarize, mean=mean(prop))
+space$Treatment <- factor(c("CL", "MD", "CL", "MD", "CL", "MD", "CL", "MD", "CL", "MD", "CL", "MD", "CL", "MD", "CL", "MD", "CL", "MD" ))
+space$Replicate <- factor(c("1", "1", "2", "2", "3", "3", "4", "4", "5", "5", "6", "6", "7", "7", "8", "8", "9", "9"))
+
+```
+
+## Plots main figure
+```{r, echo=T, message=F, warning=F}
+library(ggplot2)
+pl1 <- ggplot(trip, aes(x=relevel(Treatment, "MD"), y=mean, color=Replicate, group=Replicate)) +
+  theme_light() +
+  xlab(element_blank()) + # Remove the x axis title
+  ylab("Foraging trips per bee") +
+  geom_line() +
+  geom_boxplot(aes(x=relevel(Treatment, "MD"), group=Treatment), outlier.shape=NA, width=0.2, alpha = 0)
+
+pl2 <- ggplot(agetrip, aes(x=relevel(Treatment, "MD"), y=mean, color=Replicate, group=Replicate)) +
+  theme_light() +
+  xlab(element_blank()) + # Remove the x axis title
+  ylab("Age at first foraging trip (days)") +
+  geom_line() +
+  geom_boxplot(aes(x=relevel(Treatment, "MD"), group=Treatment), outlier.shape=NA, width=0.2, alpha = 0) 
+  
+
+pl3 <- ggplot(space, aes(x=relevel(Treatment, "MD"), y=mean, color=Replicate, group=Replicate)) +
+  theme_light() +
+  xlab(element_blank()) + # Remove the x axis title
+  ylab("Proportion of time in foraging arena") +
+  geom_line() +
+  geom_boxplot(aes(x=relevel(Treatment, "MD"), group=Treatment), outlier.shape=NA, width=0.2, alpha = 0)
+  
+
+library(ggpubr)
+ggarrange(pl1,pl3,pl2, nrow=1, widths=c(1.05,1.1,1), common.legend = T)
+ggsave(height=2,width=3.5,dpi=300, filename="ForagingFigures.pdf", useDingbats=FALSE)
+```
+
+## Statistical analyses
+```{r, echo=T, message=F, warning=F}
+##############################################################################
+## Wilcoxon test for num of trips per bee
+library(reshape2)
+data_wide <- dcast(trip, Replicate ~ Treatment, value.var="mean")
+
+# Shapiro-Wilk normality test for the difference between paired values
+d <- with(data_wide, 
+          CL - MD)
+shapiro.test(d) # W = 0.77569, p-value = 0.01074
+
+# Compute Wilcoxon test
+
+res <- wilcox.test(data_wide$CL, data_wide$MD, paired = TRUE, alternative =  "two.sided")
+res # V = 29, p-value = 0.4961
+
+##############################################################################
+## Wilcoxon test for proportion of time spent in foraging arena
+data_wide <- dcast(space, Replicate ~ Treatment, value.var="mean")
+
+# Shapiro-Wilk normality test for the difference between paired values
+d <- with(data_wide, 
+          CL - MD)
+shapiro.test(d) # W = 0.83022, p-value = 0.04491
+
+# Compute Wilcoxon test
+res <- wilcox.test(data_wide$CL, data_wide$MD, paired = TRUE, alternative =  "two.sided")
+res # V = 25, p-value = 0.8203
+
+##############################################################################
+## Paired t test for time at first foraging trip
+data_wide <- dcast(agetrip, Replicate ~ Treatment, value.var="mean")
+
+# Shapiro-Wilk normality test for the difference between paired values
+d <- with(data_wide, 
+          CL - MD)
+shapiro.test(d) # W = 0.92548, p-value = 0.4395
+
+# Compute t-test
+res <- t.test(data_wide$CL, data_wide$MD, paired = TRUE, alternative =  "two.sided")
+res # t = -4.2073, df = 8, p-value = 0.002967
+```
+
+```{r}
+sessionInfo()
+```
+
