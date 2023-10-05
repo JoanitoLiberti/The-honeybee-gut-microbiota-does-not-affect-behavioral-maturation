@@ -8,5 +8,5 @@ In the present repository we provide all data, metadata and codes needed to repr
 Separate folders contain data, metadata and codes for each component of the study: automated behavioral tracking, CHC profiling, RNA-sequencing, weight and hypopharyngeal gland size measurments, as well as comparisons of physiology and behavior between CHC-classified nurses and foragers.
 
 # Reference publication:
-Liberti J, Frank ET, Kay T, Kesner L, Monié—Ibanes M, Quinn A, Schmitt T, Keller L, Engel P. The honeybee gut microbiota affects the onset of foraging but not the division of labor
+Liberti J, Frank ET, Kay T, Kesner L, Monié--Ibanes M, Quinn A, Schmitt T, Keller L, Engel P. The honeybee gut microbiota affects the onset of foraging but not the division of labor
 or associated physiological hallmarks
