@@ -47,7 +47,7 @@ ggsave(filename="WeightGainExperiments.pdf", height=10, width=14, dpi=300, useDi
 pollen <- subset(data_long, Experiment=="Pollen exp")
 beebread <- subset(data_long, Experiment=="Bee Bread exp")
 
-# Statistical analyses - effect of time and treatment on weight gain in the two experiments. We also test if N and F have different weight as that can explain the significant interaction between time and treatment in the pollen experiment
+# Statistical analyses - effect of time and treatment on weight gain in the two experiments
 library(lmerTest)
 resul <- lmer(WeightGain ~ Day*Treatment + (1|Hive/UniqueBox/BeeID), data = pollen)
 summary(resul)
