@@ -46,6 +46,9 @@ dt<-merge(samdf,chc_scores, by="Sample_ID", all=T)
 
 
 ```{r}
+library(ggplot2)
+library(ggbeeswarm)
+
 dt <- subset(dt, Treatment=="MD" | Treatment=="CL")
 dt$NandF <- as.factor(dt$NandF)
 
@@ -55,7 +58,7 @@ give.n <- function(x){return(c(y = -0.7, label = length(x))) # experiment with t
 }
 pq7 <- ggplot(subset(dt, !is.na(NandF)), aes(x = factor(NandF, levels=c("Nurse", "Forager")), y = HH/Tot))+ 
   geom_beeswarm(aes(colour = NandF),cex=1.5) +
-  geom_boxplot(outlier.shape = NA, width = 0.3, alpha=0)+
+  geom_boxplot(outlier.shape = NA, width = 0.5, alpha=0)+
   scale_x_discrete()+ 
   scale_y_log10()+
   annotation_logticks(base = 10, sides = "l", scaled = TRUE,
@@ -182,7 +185,7 @@ give.n <- function(x){return(c(y = -0.2, label = length(x))) # experiment with t
 }
 pq8 <- ggplot(subset(df, !is.na(NandF)), aes(x = factor(NandF, levels=c("Nurse", "Forager")), y = log10(trips+1)))+ 
   geom_beeswarm(aes(colour = NandF),cex=0.7) +
-  geom_boxplot(outlier.shape = NA, width = 0.3, alpha=0)+
+  geom_boxplot(outlier.shape = NA, width = 0.5, alpha=0)+
   scale_x_discrete()+ 
   ylab("Log10 (Foraging trips + 1)") +
   stat_summary(fun.data = give.n, geom = "text") + # add number of observations
@@ -194,7 +197,7 @@ give.n <- function(x){return(c(y = 3, label = length(x))) # experiment with the 
 }
 pq10 <- ggplot(subset(df, !is.na(NandF)), aes(x = factor(NandF, levels=c("Nurse", "Forager")), y = first))+ 
   geom_beeswarm(aes(colour = NandF),cex=0.7) +
-  geom_boxplot(outlier.shape = NA, width = 0.3, alpha=0)+
+  geom_boxplot(outlier.shape = NA, width = 0.5, alpha=0)+
   scale_x_discrete()+ 
   ylab("Age at first foraging trip (days)") +
   stat_summary(fun.data = give.n, geom = "text") + # add number of observations
@@ -202,8 +205,21 @@ pq10 <- ggplot(subset(df, !is.na(NandF)), aes(x = factor(NandF, levels=c("Nurse"
   theme_bw()
 print(pq10)
 
-ggarrange(pq7,pq8,pq10, nrow=1, common.legend = TRUE, legend="bottom")
-ggsave(height=5,width=7,dpi=300, filename="InteractionsTripsAndOnset_FvsN.pdf", useDingbats=FALSE)
+give.n <- function(x){return(c(y = -0.05, label = length(x))) # experiment with the multiplier to find the perfect position
+}
+pq11 <- ggplot(subset(df, !is.na(NandF)), aes(x = factor(NandF, levels=c("Nurse", "Forager")), y = prop))+ 
+  geom_beeswarm(aes(colour = NandF),cex=0.7) +
+  geom_boxplot(outlier.shape = NA, width = 0.5, alpha=0)+
+  scale_x_discrete()+ 
+  ylab("Proportion of time spent in the foraging arena") +
+  stat_summary(fun.data = give.n, geom = "text") + # add number of observations
+  scale_color_manual(values = c('Nurse' = '#E69F00', 'Forager' = '#56B4E9'))+
+  theme_bw()
+print(pq11)
+
+library(ggpubr)
+ggarrange(pq7,pq8,pq10,pq11, nrow=1, common.legend = TRUE, legend="bottom")
+ggsave(height=5,width=9.5,dpi=300, filename="InteractionsTripsAndOnset_FvsN.pdf", useDingbats=FALSE)
 ```
 
 # Stats 
@@ -229,6 +245,13 @@ dt3<-subset(df, !is.na(NandF))
 dt3<-subset(dt3, !is.na(first))
 dt3$nest <- factor(paste0(dt3$Treatment, dt3$Replicate))
 resul<- lmer(first ~ NandF + (1|Replicate:nest) , data=dt3)
+summary(resul)
+anova(resul)
+
+dt4<-subset(df, !is.na(NandF))
+dt4<-subset(dt4, !is.na(prop))
+dt4$nest <- factor(paste0(dt4$Treatment, dt4$Replicate))
+resul<- lmer(prop ~ NandF + (1|Replicate:nest) , data=dt4)
 summary(resul)
 anova(resul)
 ```
