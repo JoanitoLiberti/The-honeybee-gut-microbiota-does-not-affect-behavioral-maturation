@@ -288,6 +288,112 @@ write.table(sigtab, "LiveVsHeatKilled-DESeq2.txt", sep="\t")
 
 ## Only 5 ASVs mostly representing opportunistic infections have significantly different relative abundances between heat-killed and live inoculation treatments in this experiment. 
 
+# **Mono-inoculations experiment** - Microbiota Fig. 3B
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width=if (fig_small) width_small else width_large}
+df = read.table("SciAdv_Microbiota-3B-Monoinoculations.txt", header = T, sep="\t") # data underlying Fig. 3B in Vernier et al. 2020 Science Advances - can be found in supplementary file sciadv.abd3431_data_file_s2
+
+df[, -c(1,2)] <- df[ , -c(1,2)]/rowSums(df[1, -c(1,2)]) # Here we divide by the row sum to get proportions as the authors deposited the table as supplement after rarefying to the same depth
+
+# Here we filter out ASVs that have less than 2% relative abundance in two samples, to make barplots more legible
+f1 <- kOverA(2, 0.02)
+ffun <- filterfun(f1)
+filt1 <- genefilter(t(df[, -c(1,2)]), ffun)
+
+mdf<-df[, -c(1,2)][,filt1]
+
+mdf <- cbind(Sample_ID = df$Sample_ID, Treatment = factor(df$Treatment), mdf)
+
+
+mdf<- reshape(mdf, 
+        direction = "long",
+        varying = list(names(mdf)[3:ncol(mdf)]),
+        v.names = "Value",
+        idvar = c("Sample_ID", "Treatment"),
+        timevar = "ASV", 
+        times = colnames(mdf[3:ncol(mdf)]))
+
+library(RColorBrewer)
+cbPalette<-colorRampPalette(brewer.pal(12, "Paired"))
+
+set.seed(2) # Change the number within parentheses to change the order of colors in the plot. Here we use set.seed to make the colors reproducible, because in scale_fill_manual we use "sample" to shuffle the color order.
+
+mdf$Colony <- factor(mdf$Treatment)
+mdf$ASV <- factor(mdf$ASV)
+
+p3 = ggplot(mdf, aes_string(x = "Sample_ID", y = "Value", fill = "ASV")) +
+  geom_bar(stat = "identity", position = "stack", color = "black") +
+  ylab("Relative abundance") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), legend.position="bottom", strip.background = element_blank()) + # ,  strip.text.x = element_blank()
+  facet_grid(. ~ Colony, scale="free", space="fixed") +
+  scale_fill_manual(values=sample(cbPalette(20)))  
+
+print(p3, width = 1000, height = 200)
+
+dev.new()
+pdf(file="Barplots_Mono-inoculations.pdf",width=10,height=4, pointsize=4)
+p3
+dev.off()
+```
+
+# Let's analyze what ASVs are signficantly different between monoinoculations by DESeq2
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width=if (fig_small) width_small else width_large}
+df = read.table("SciAdv_Microbiota-3B-Monoinoculations.txt", header = T, sep="\t") 
+
+# **Load and filter the data in phyloseq**
+library(ggplot2)
+library(vegan) # ecological diversity analysis
+library(dplyr)
+library(scales) # scale functions for vizualizations
+library(grid)
+library(RColorBrewer)
+library(reshape2) # data manipulation package
+library(cowplot)
+library(phyloseq)
+library(tidyverse)
+library(readxl)
+
+# Set plotting theme
+theme_set(theme_bw())
+
+#Create a phyloseq object
+otutab<-df[,-2]
+rownames(otutab)<-otutab[,1]
+otutab[,1]<-NULL
+
+mapping<-df[,c(1,2)]
+rownames(mapping)<-mapping[,1]
+
+taxa<- colnames(otutab)
+taxa<-as.data.frame(taxa)
+rownames(taxa) <- taxa[,1]
+taxa<-as.matrix(taxa)
+
+ps <- phyloseq(otu_table(otutab, taxa_are_rows=FALSE), 
+               sample_data(mapping), 
+               tax_table(taxa))
+               
+# sample_data(ps) 
+
+# Load DESeq2
+library("DESeq2"); packageVersion("DESeq2")
+
+diagdds = phyloseq_to_deseq2(ps, ~ Treatment)
+
+# calculate geometric means prior to estimate size factors
+gm_mean = function(x, na.rm=TRUE){
+  exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+}
+geoMeans = apply(counts(diagdds), 1, gm_mean)
+diagdds = estimateSizeFactors(diagdds, geoMeans = geoMeans)
+diagdds = DESeq(diagdds, fitType="local")
+
+res = results(diagdds, cooksCutoff = FALSE)
+alpha = 0.05
+sigtab = res[which(res$padj < alpha), ]
+sigtab = cbind(as(sigtab, "data.frame"), as(tax_table(ps)[rownames(sigtab), ], "matrix"))
+sigtab
+```
+
 ```{r, echo=FALSE, message=FALSE, warning=FALSE}
 # save.image (file = "SciAdvReanalysis.RData")
 sessionInfo()
