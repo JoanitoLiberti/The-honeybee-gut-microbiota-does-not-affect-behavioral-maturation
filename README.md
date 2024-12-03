@@ -1,5 +1,5 @@
 # Investigating the relationship between gut microbiota, behavioral maturation, and division of labor in honeybees
-Data and code underlying the study "Gut microbiota influences onset of foraging-related behavior but not physiological hallmarks of division of labor in honeybees"
+Data and code underlying the study "Gut microbiota influences onset of foraging-related behavior but not physiological hallmarks of division of labor in honeybees".
 
 We used a combination of automated behavioural tracking, CHC profiling, RNA-sequencing and measurements of weight, hypopharyngeal gland size to investigate the relationship between the gut microbiota, behavioral maturation, and the resulting division of labor in honeybee colonies. <br />
 
